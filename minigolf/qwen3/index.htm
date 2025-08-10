@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf Slingshot Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(to bottom, #1a2980, #26d0ce);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            color: white;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            background: #7ec0ee;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        button {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        button:hover {
+            background: #ff5252;
+        }
+        
+        #powerMeter {
+            width: 200px;
+            height: 20px;
+            background: #333;
+            border-radius: 10px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        
+        #powerBar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(to right, #4CAF50, #FFEB3B, #F44336);
+            transition: width 0.1s;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="ui">
+            <h2>Golf Slingshot</h2>
+            <p>Shots: <span id="shotCount">0</span></p>
+            <p>Best: <span id="bestScore">-</span></p>
+            <div>Power:</div>
+            <div id="powerMeter">
+                <div id="powerBar"></div>
+            </div>
+            <button id="resetBtn">Reset Ball</button>
+        </div>
+        
+        <div id="instructions">
+            <p>Click and drag to aim and set power. Release to launch the ball!</p>
+            <p>Get the ball in the hole to win. Avoid the walls!</p>
+        </div>
+    </div>
+
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const shotCountElement = document.getElementById('shotCount');
+        const bestScoreElement = document.getElementById('bestScore');
+        const powerBar = document.getElementById('powerBar');
+        const resetBtn = document.getElementById('resetBtn');
+        
+        // Game constants
+        const GRAVITY = 0.2;
+        const FRICTION = 0.99;
+        const BOUNCE_DAMPING = 0.7;
+        const BALL_RADIUS = 12;
+        const HOLE_RADIUS = 25;
+        const WALL_WIDTH = 20;
+        
+        // Game state
+        let ball = {
+            x: 100,
+            y: 300,
+            vx: 0,
+            vy: 0,
+            radius: BALL_RADIUS,
+            color: '#FF5722'
+        };
+        
+        let hole = {
+            x: 700,
+            y: 500,
+            radius: HOLE_RADIUS
+        };
+        
+        let walls = [
+            { x: 0, y: 0, width: WALL_WIDTH, height: canvas.height }, // Left wall
+            { x: canvas.width - WALL_WIDTH, y: 0, width: WALL_WIDTH, height: canvas.height } // Right wall
+        ];
+        
+        let terrain = [];
+        let shotCount = 0;
+        let bestScore = localStorage.getItem('bestGolfScore') || '-';
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let power = 0;
+        let powerDirection = 1;
+        
+        // Initialize game
+        function init() {
+            generateTerrain();
+            resetBall();
+            shotCount = 0;
+            updateShotCount();
+            bestScoreElement.textContent = bestScore;
+        }
+        
+        // Generate random terrain
+        function generateTerrain() {
+            terrain = [];
+            const baseHeight = canvas.height - 50;
+            
+            // Start with a flat area at the beginning
+            terrain.push({ x: 0, y: baseHeight });
+            terrain.push({ x: 150, y: baseHeight });
+            
+            // Generate random terrain points
+            for (let i = 150; i < canvas.width - 150; i += 30) {
+                const height = baseHeight - Math.random() * 100 - 30;
+                terrain.push({ x: i, y: height });
+            }
+            
+            // End with a flat area near the hole
+            terrain.push({ x: canvas.width - 150, y: baseHeight - 20 });
+            terrain.push({ x: canvas.width, y: baseHeight - 20 });
+        }
+        
+        // Reset ball to starting position
+        function resetBall() {
+            ball.x = 100;
+            ball.y = 300;
+            ball.vx = 0;
+            ball.vy = 0;
+            isDragging = false;
+            power = 0;
+            powerBar.style.width = '0%';
+        }
+        
+        // Update shot count display
+        function updateShotCount() {
+            shotCountElement.textContent = shotCount;
+        }
+        
+        // Draw the game
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw sky background
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw clouds
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            drawCloud(100, 80, 30);
+            drawCloud(300, 120, 40);
+            drawCloud(600, 70, 35);
+            
+            // Draw terrain
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            terrain.forEach(point => {
+                ctx.lineTo(point.x, point.y);
+            });
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.closePath();
+            ctx.fillStyle = '#4CAF50';
+            ctx.fill();
+            
+            // Draw grass details
+            ctx.strokeStyle = '#388E3C';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < terrain.length - 1; i++) {
+                ctx.beginPath();
+                ctx.moveTo(terrain[i].x, terrain[i].y);
+                ctx.lineTo(terrain[i+1].x, terrain[i+1].y);
+                ctx.stroke();
+            }
+            
+            // Draw walls
+            walls.forEach(wall => {
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
+                
+                // Draw brick pattern
+                ctx.strokeStyle = '#A0522D';
+                ctx.lineWidth = 1;
+                for (let y = 0; y < wall.height; y += 20) {
+                    for (let x = 0; x < wall.width; x += 20) {
+                        ctx.strokeRect(wall.x + x, wall.y + y, 20, 20);
+                    }
+                }
+            });
+            
+            // Draw hole
+            ctx.beginPath();
+            ctx.arc(hole.x, hole.y, hole.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#000';
+            ctx.fill();
+            
+            // Draw hole flag
+            ctx.beginPath();
+            ctx.moveTo(hole.x, hole.y - hole.radius);
+            ctx.lineTo(hole.x, hole.y - hole.radius - 50);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(hole.x, hole.y - hole.radius - 50);
+            ctx.lineTo(hole.x + 20, hole.y - hole.radius - 30);
+            ctx.lineTo(hole.x, hole.y - hole.radius - 10);
+            ctx.closePath();
+            ctx.fillStyle = '#FF0000';
+            ctx.fill();
+            
+            // Draw ball
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = ball.color;
+            ctx.fill();
+            
+            // Draw ball highlight
+            ctx.beginPath();
+            ctx.arc(ball.x - ball.radius/3, ball.y - ball.radius/3, ball.radius/3, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.fill();
+            
+            // Draw slingshot when dragging
+            if (isDragging) {
+                drawSlingshot();
+            }
+        }
+        
+        // Draw clouds
+        function drawCloud(x, y, size) {
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
+            ctx.arc(x + size * 0.4, y - size * 0.2, size * 0.4, 0, Math.PI * 2);
+            ctx.arc(x + size * 0.7, y, size * 0.5, 0, Math.PI * 2);
+            ctx.arc(x + size * 0.4, y + size * 0.2, size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Draw slingshot
+        function drawSlingshot() {
+            // Draw slingshot base
+            ctx.beginPath();
+            ctx.moveTo(ball.x - 30, ball.y + 30);
+            ctx.lineTo(ball.x, ball.y);
+            ctx.lineTo(ball.x + 30, ball.y + 30);
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+            
+            // Draw rubber band
+            ctx.beginPath();
+            ctx.moveTo(ball.x, ball.y);
+            ctx.lineTo(dragStart.x, dragStart.y);
+            ctx.strokeStyle = '#5D4037';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            // Draw aiming line
+            const dx = ball.x - dragStart.x;
+            const dy = ball.y - dragStart.y;
+            const distance = Math.min(Math.sqrt(dx * dx + dy * dy), 100);
+            const angle = Math.atan2(dy, dx);
+            
+            ctx.beginPath();
+            ctx.moveTo(ball.x, ball.y);
+            ctx.lineTo(
+                ball.x + Math.cos(angle) * distance * 2,
+                ball.y + Math.sin(angle) * distance * 2
+            );
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 3]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        
+        // Update game state
+        function update() {
+            if (!isDragging) {
+                // Apply physics
+                ball.vy += GRAVITY;
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+                
+                // Apply friction
+                ball.vx *= FRICTION;
+                ball.vy *= FRICTION;
+                
+                // Check wall collisions
+                walls.forEach(wall => {
+                    if (ball.x + ball.radius > wall.x && 
+                        ball.x - ball.radius < wall.x + wall.width &&
+                        ball.y + ball.radius > wall.y && 
+                        ball.y - ball.radius < wall.y + wall.height) {
+                        
+                        // Determine which side of the wall was hit
+                        const leftOverlap = (ball.x + ball.radius) - wall.x;
+                        const rightOverlap = (wall.x + wall.width) - (ball.x - ball.radius);
+                        const topOverlap = (ball.y + ball.radius) - wall.y;
+                        const bottomOverlap = (wall.y + wall.height) - (ball.y - ball.radius);
+                        
+                        const minOverlap = Math.min(leftOverlap, rightOverlap, topOverlap, bottomOverlap);
+                        
+                        if (minOverlap === leftOverlap || minOverlap === rightOverlap) {
+                            ball.vx = -ball.vx * BOUNCE_DAMPING;
+                        } else {
+                            ball.vy = -ball.vy * BOUNCE_DAMPING;
+                        }
+                        
+                        // Move ball out of wall
+                        if (minOverlap === leftOverlap) ball.x = wall.x - ball.radius;
+                        if (minOverlap === rightOverlap) ball.x = wall.x + wall.width + ball.radius;
+                        if (minOverlap === topOverlap) ball.y = wall.y - ball.radius;
+                        if (minOverlap === bottomOverlap) ball.y = wall.y + wall.height + ball.radius;
+                    }
+                });
+                
+                // Check if ball is in hole
+                const dx = ball.x - hole.x;
+                const dy = ball.y - hole.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < hole.radius - ball.radius/2) {
+                    // Ball is in hole!
+                    if (bestScore === '-' || shotCount < bestScore) {
+                        bestScore = shotCount;
+                        localStorage.setItem('bestGolfScore', bestScore);
+                        bestScoreElement.textContent = bestScore;
+                    }
+                    
+                    setTimeout(() => {
+                        alert(`You won in ${shotCount} shots!`);
+                        init();
+                    }, 500);
+                    return;
+                }
+                
+                // Check if ball is out of bounds (top of screen)
+                if (ball.y < -50) {
+                    resetBall();
+                }
+            } else {
+                // Increase power while dragging
+                power += powerDirection * 2;
+                if (power >= 100) {
+                    power = 100;
+                    powerDirection = -1;
+                } else if (power <= 0) {
+                    power = 0;
+                    powerDirection = 1;
+                }
+                powerBar.style.width = power + '%';
+            }
+        }
+        
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Event listeners
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Check if click is on the ball
+            const dx = x - ball.x;
+            const dy = y - ball.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < ball.radius) {
+                isDragging = true;
+                dragStart = { x, y };
+            }
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                dragStart.x = e.clientX - rect.left;
+                dragStart.y = e.clientY - rect.top;
+            }
+        });
+        
+        canvas.addEventListener('mouseup', (e) => {
+            if (isDragging) {
+                isDragging = false;
+                
+                // Calculate launch velocity based on drag distance
+                const dx = ball.x - dragStart.x;
+                const dy = ball.y - dragStart.y;
+                
+                // Limit max power
+                const distance = Math.min(Math.sqrt(dx * dx + dy * dy), 100);
+                const angle = Math.atan2(dy, dx);
+                
+                // Apply power multiplier
+                const powerMultiplier = power / 100;
+                
+                ball.vx = Math.cos(angle) * distance * 0.15 * powerMultiplier;
+                ball.vy = Math.sin(angle) * distance * 0.15 * powerMultiplier;
+                
+                // Reset power
+                power = 0;
+                powerBar.style.width = '0%';
+                
+                // Increment shot count
+                shotCount++;
+                updateShotCount();
+            }
+        });
+        
+        resetBtn.addEventListener('click', () => {
+            resetBall();
+            shotCount++;
+            updateShotCount();
+        });
+        
+        // Start the game
+        init();
+        gameLoop();
+    </script>
+</body>
+</html>

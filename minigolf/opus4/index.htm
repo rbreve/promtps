@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf Slingshot Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+        }
+        
+        #gameCanvas {
+            border: 3px solid #333;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            cursor: crosshair;
+            background: linear-gradient(to bottom, #87CEEB 0%, #87CEEB 40%, #98D98E 40%);
+        }
+        
+        .info {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        
+        .controls {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <div>🏌️ Golf Slingshot 🎯</div>
+        <div class="controls">Click and drag to aim, release to shoot!</div>
+        <div id="score">Shots: 0 | Best: -</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Canvas setup
+        canvas.width = 800;
+        canvas.height = 600;
+        
+        // Game variables
+        let ball = {
+            x: 100,
+            y: 300,
+            vx: 0,
+            vy: 0,
+            radius: 8,
+            trail: []
+        };
+        
+        let hole = {
+            x: 700,
+            y: 400,
+            radius: 15
+        };
+        
+        let terrain = [];
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let dragEnd = { x: 0, y: 0 };
+        let shots = 0;
+        let bestScore = localStorage.getItem('bestScore') || '-';
+        let particles = [];
+        
+        // Physics constants
+        const GRAVITY = 0.3;
+        const FRICTION = 0.98;
+        const BOUNCE_DAMPING = 0.7;
+        const MAX_POWER = 20;
+        const WALL_WIDTH = 10;
+        
+        // Initialize terrain
+        function generateTerrain() {
+            terrain = [];
+            const segments = 30;
+            const segmentWidth = canvas.width / segments;
+            
+            for (let i = 0; i <= segments; i++) {
+                let height;
+                if (i < 3) {
+                    // Start area - flat
+                    height = canvas.height - 150;
+                } else if (i > segments - 3) {
+                    // End area - flat for hole
+                    height = canvas.height - 200;
+                } else {
+                    // Random hills and valleys
+                    height = canvas.height - 150 - Math.sin(i * 0.5) * 50 - Math.random() * 80;
+                }
+                terrain.push({
+                    x: i * segmentWidth,
+                    y: height
+                });
+            }
+            
+            // Place hole on terrain
+            hole.y = terrain[terrain.length - 3].y - 5;
+        }
+        
+        // Create particle effect
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: -Math.random() * 5,
+                    life: 1,
+                    color: color
+                });
+            }
+        }
+        
+        // Reset ball position
+        function resetBall() {
+            ball.x = 100;
+            ball.y = terrain[2].y - 50;
+            ball.vx = 0;
+            ball.vy = 0;
+            ball.trail = [];
+        }
+        
+        // Check if ball is in hole
+        function checkHole() {
+            const dx = ball.x - hole.x;
+            const dy = ball.y - hole.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < hole.radius && Math.abs(ball.vx) < 2 && Math.abs(ball.vy) < 2) {
+                createParticles(hole.x, hole.y, '#FFD700');
+                
+                // Update best score
+                if (bestScore === '-' || shots < parseInt(bestScore)) {
+                    bestScore = shots;
+                    localStorage.setItem('bestScore', bestScore);
+                }
+                
+                // Reset game
+                setTimeout(() => {
+                    shots = 0;
+                    generateTerrain();
+                    resetBall();
+                    updateScore();
+                }, 1000);
+                
+                return true;
+            }
+            return false;
+        }
+        
+        // Update ball physics
+        function updateBall() {
+            if (isDragging) return;
+            
+            // Apply gravity
+            ball.vy += GRAVITY;
+            
+            // Apply friction
+            ball.vx *= FRICTION;
+            ball.vy *= FRICTION;
+            
+            // Update position
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+            
+            // Check wall collisions
+            if (ball.x - ball.radius <= WALL_WIDTH) {
+                ball.x = WALL_WIDTH + ball.radius;
+                ball.vx = Math.abs(ball.vx) * BOUNCE_DAMPING;
+                createParticles(ball.x, ball.y, '#FF6B6B');
+            }
+            if (ball.x + ball.radius >= canvas.width - WALL_WIDTH) {
+                ball.x = canvas.width - WALL_WIDTH - ball.radius;
+                ball.vx = -Math.abs(ball.vx) * BOUNCE_DAMPING;
+                createParticles(ball.x, ball.y, '#FF6B6B');
+            }
+            
+            // Check terrain collision
+            for (let i = 0; i < terrain.length - 1; i++) {
+                const p1 = terrain[i];
+                const p2 = terrain[i + 1];
+                
+                if (ball.x >= p1.x && ball.x <= p2.x) {
+                    const t = (ball.x - p1.x) / (p2.x - p1.x);
+                    const terrainY = p1.y + (p2.y - p1.y) * t;
+                    
+                    if (ball.y + ball.radius > terrainY) {
+                        ball.y = terrainY - ball.radius;
+                        
+                        // Calculate bounce angle based on terrain slope
+                        const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+                        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+                        
+                        ball.vy = -Math.abs(ball.vy) * BOUNCE_DAMPING;
+                        
+                        if (speed < 0.5) {
+                            ball.vx *= 0.9;
+                            ball.vy = 0;
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            // Add to trail
+            ball.trail.push({ x: ball.x, y: ball.y });
+            if (ball.trail.length > 20) {
+                ball.trail.shift();
+            }
+            
+            // Check if ball is out of bounds (fell off)
+            if (ball.y > canvas.height) {
+                resetBall();
+            }
+            
+            // Check hole
+            checkHole();
+        }
+        
+        // Update particles
+        function updateParticles() {
+            particles = particles.filter(p => {
+                p.vy += GRAVITY * 0.5;
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.02;
+                return p.life > 0;
+            });
+        }
+        
+        // Draw everything
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = 'rgba(135, 206, 235, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw walls
+            ctx.fillStyle = '#444';
+            ctx.fillRect(0, 0, WALL_WIDTH, canvas.height);
+            ctx.fillRect(canvas.width - WALL_WIDTH, 0, WALL_WIDTH, canvas.height);
+            
+            // Draw terrain
+            ctx.beginPath();
+            ctx.moveTo(terrain[0].x, terrain[0].y);
+            for (let i = 1; i < terrain.length; i++) {
+                ctx.lineTo(terrain[i].x, terrain[i].y);
+            }
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.lineTo(0, canvas.height);
+            ctx.closePath();
+            
+            // Gradient for terrain
+            const gradient = ctx.createLinearGradient(0, canvas.height - 200, 0, canvas.height);
+            gradient.addColorStop(0, '#8BC34A');
+            gradient.addColorStop(0.5, '#689F38');
+            gradient.addColorStop(1, '#4CAF50');
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // Draw hole
+            ctx.beginPath();
+            ctx.arc(hole.x, hole.y, hole.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#222';
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Draw flag
+            ctx.beginPath();
+            ctx.moveTo(hole.x, hole.y);
+            ctx.lineTo(hole.x, hole.y - 40);
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(hole.x, hole.y - 40);
+            ctx.lineTo(hole.x + 20, hole.y - 30);
+            ctx.lineTo(hole.x, hole.y - 20);
+            ctx.closePath();
+            ctx.fillStyle = '#FF0000';
+            ctx.fill();
+            
+            // Draw ball trail
+            for (let i = 0; i < ball.trail.length; i++) {
+                ctx.beginPath();
+                ctx.arc(ball.trail[i].x, ball.trail[i].y, (i / ball.trail.length) * 3, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${i / ball.trail.length * 0.3})`;
+                ctx.fill();
+            }
+            
+            // Draw ball
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFF';
+            ctx.fill();
+            ctx.strokeStyle = '#DDD';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            // Draw slingshot line when dragging
+            if (isDragging) {
+                ctx.beginPath();
+                ctx.moveTo(ball.x, ball.y);
+                ctx.lineTo(dragEnd.x, dragEnd.y);
+                ctx.strokeStyle = '#FF6B6B';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // Draw power indicator
+                const power = Math.min(
+                    Math.sqrt(
+                        Math.pow(dragEnd.x - ball.x, 2) + 
+                        Math.pow(dragEnd.y - ball.y, 2)
+                    ) / 10,
+                    MAX_POWER
+                );
+                
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, 20 + power * 2, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(255, 107, 107, ${0.3 + power / MAX_POWER * 0.5})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            
+            // Draw particles
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+        }
+        
+        // Update score display
+        function updateScore() {
+            document.getElementById('score').textContent = `Shots: ${shots} | Best: ${bestScore}`;
+        }
+        
+        // Mouse events
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const dx = x - ball.x;
+            const dy = y - ball.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < 50 && Math.abs(ball.vx) < 0.5 && Math.abs(ball.vy) < 0.5) {
+                isDragging = true;
+                dragStart.x = x;
+                dragStart.y = y;
+                dragEnd.x = x;
+                dragEnd.y = y;
+            }
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                dragEnd.x = e.clientX - rect.left;
+                dragEnd.y = e.clientY - rect.top;
+            }
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            if (isDragging) {
+                const dx = ball.x - dragEnd.x;
+                const dy = ball.y - dragEnd.y;
+                const power = Math.min(
+                    Math.sqrt(dx * dx + dy * dy) / 10,
+                    MAX_POWER
+                );
+                
+                ball.vx = dx / 10;
+                ball.vy = dy / 10;
+                
+                isDragging = false;
+                shots++;
+                updateScore();
+                createParticles(ball.x, ball.y, '#4ECDC4');
+            }
+        });
+        
+        // Touch events for mobile
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            
+            const dx = x - ball.x;
+            const dy = y - ball.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < 50 && Math.abs(ball.vx) < 0.5 && Math.abs(ball.vy) < 0.5) {
+                isDragging = true;
+                dragStart.x = x;
+                dragStart.y = y;
+                dragEnd.x = x;
+                dragEnd.y = y;
+            }
+        });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                dragEnd.x = touch.clientX - rect.left;
+                dragEnd.y = touch.clientY - rect.top;
+            }
+        });
+        
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (isDragging) {
+                const dx = ball.x - dragEnd.x;
+                const dy = ball.y - dragEnd.y;
+                const power = Math.min(
+                    Math.sqrt(dx * dx + dy * dy) / 10,
+                    MAX_POWER
+                );
+                
+                ball.vx = dx / 10;
+                ball.vy = dy / 10;
+                
+                isDragging = false;
+                shots++;
+                updateScore();
+                createParticles(ball.x, ball.y, '#4ECDC4');
+            }
+        });
+        
+        // Game loop
+        function gameLoop() {
+            updateBall();
+            updateParticles();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Initialize game
+        generateTerrain();
+        resetBall();
+        updateScore();
+        gameLoop();
+    </script>
+</body>
+</html>

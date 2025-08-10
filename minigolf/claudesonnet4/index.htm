@@ -1,0 +1,336 @@
+
+<!DOCTYPE html>
+<!-- create a slingshot like mechanic for launching a ball, create a random terrain, inside a hole, if when the ball hits the hall it restarts again, like a golf sling shot game, using js/html, make two walls in the left and right side of screen so the ball can bounce, -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slingshot Golf Game (Claude Sonnet 4)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #87CEEB;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        canvas {
+            border: 3px solid #333;
+            background: linear-gradient(to bottom, #87CEEB 0%, #90EE90 100%);
+            cursor: crosshair;
+        }
+        
+        .ui {
+            margin-top: 10px;
+            text-align: center;
+        }
+        
+        .power-meter {
+            width: 200px;
+            height: 20px;
+            border: 2px solid #333;
+            background: #fff;
+            margin: 10px auto;
+            position: relative;
+        }
+        
+        .power-fill {
+            height: 100%;
+            background: linear-gradient(to right, #00ff00, #ffff00, #ff0000);
+            width: 0%;
+            transition: width 0.1s;
+        }
+    </style>
+</head>
+<body>
+    <h1>Slingshot Golf (Claude Sonnet 4)</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div class="ui">
+        <div>Click and drag from the ball to aim and set power</div>
+        <div class="power-meter">
+            <div class="power-fill" id="powerFill"></div>
+        </div>
+        <div id="info">Shots: 0</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const powerFill = document.getElementById('powerFill');
+        const info = document.getElementById('info');
+
+        // Game state
+        let ball = { x: 100, y: 500, vx: 0, vy: 0, radius: 8 };
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let shots = 0;
+        let terrain = [];
+        let hole = { x: 0, y: 0, radius: 25 };
+
+        // Physics constants
+        const gravity = 0.3;
+        const friction = 0.98;
+        const bounceDamping = 0.7;
+        const wallWidth = 20;
+
+        // Generate random terrain
+        function generateTerrain() {
+            terrain = [];
+            const points = 15;
+            const width = canvas.width;
+            
+            for (let i = 0; i <= points; i++) {
+                const x = (i / points) * width;
+                const baseHeight = 150 + Math.sin(i * 0.5) * 50;
+                const noise = Math.random() * 60 - 30;
+                const y = canvas.height - baseHeight - noise;
+                terrain.push({ x, y });
+            }
+            
+            // Place hole on terrain
+            const holeIndex = Math.floor(points * 0.7 + Math.random() * points * 0.2);
+            hole.x = terrain[holeIndex].x;
+            hole.y = terrain[holeIndex].y - 10;
+        }
+
+        // Draw terrain
+        function drawTerrain() {
+            ctx.fillStyle = '#8B4513';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            
+            for (let point of terrain) {
+                ctx.lineTo(point.x, point.y);
+            }
+            
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Draw grass on top
+            ctx.strokeStyle = '#228B22';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, terrain[0].y);
+            for (let point of terrain) {
+                ctx.lineTo(point.x, point.y);
+            }
+            ctx.stroke();
+        }
+
+        // Draw walls
+        function drawWalls() {
+            ctx.fillStyle = '#666';
+            // Left wall
+            ctx.fillRect(0, 0, wallWidth, canvas.height);
+            // Right wall
+            ctx.fillRect(canvas.width - wallWidth, 0, wallWidth, canvas.height);
+        }
+
+        // Draw hole
+        function drawHole() {
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(hole.x, hole.y, hole.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Hole rim
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Flag
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(hole.x, hole.y);
+            ctx.lineTo(hole.x, hole.y - 40);
+            ctx.stroke();
+            
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(hole.x, hole.y - 40, 20, 15);
+        }
+
+        // Draw ball
+        function drawBall() {
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // Draw slingshot line
+        function drawSlingshot(mouseX, mouseY) {
+            if (isDragging) {
+                const dx = ball.x - mouseX;
+                const dy = ball.y - mouseY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const maxPower = 150;
+                const power = Math.min(distance, maxPower) / maxPower * 100;
+                
+                powerFill.style.width = power + '%';
+                
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(ball.x, ball.y);
+                ctx.lineTo(mouseX, mouseY);
+                ctx.stroke();
+                
+                // Draw power indicator
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, distance * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Get terrain height at x position
+        function getTerrainHeight(x) {
+            for (let i = 0; i < terrain.length - 1; i++) {
+                if (x >= terrain[i].x && x <= terrain[i + 1].x) {
+                    const ratio = (x - terrain[i].x) / (terrain[i + 1].x - terrain[i].x);
+                    return terrain[i].y + (terrain[i + 1].y - terrain[i].y) * ratio;
+                }
+            }
+            return canvas.height;
+        }
+
+        // Update ball physics
+        function updateBall() {
+            if (Math.abs(ball.vx) < 0.1 && Math.abs(ball.vy) < 0.1) {
+                ball.vx = 0;
+                ball.vy = 0;
+            }
+            
+            if (ball.vx !== 0 || ball.vy !== 0) {
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+                ball.vy += gravity;
+                ball.vx *= friction;
+                ball.vy *= friction;
+                
+                // Wall collisions
+                if (ball.x - ball.radius <= wallWidth) {
+                    ball.x = wallWidth + ball.radius;
+                    ball.vx = -ball.vx * bounceDamping;
+                }
+                if (ball.x + ball.radius >= canvas.width - wallWidth) {
+                    ball.x = canvas.width - wallWidth - ball.radius;
+                    ball.vx = -ball.vx * bounceDamping;
+                }
+                
+                // Terrain collision
+                const terrainHeight = getTerrainHeight(ball.x);
+                if (ball.y + ball.radius >= terrainHeight) {
+                    ball.y = terrainHeight - ball.radius;
+                    ball.vy = -ball.vy * bounceDamping;
+                    ball.vx *= 0.9; // Ground friction
+                }
+                
+                // Check if ball is in hole
+                const distToHole = Math.sqrt((ball.x - hole.x) ** 2 + (ball.y - hole.y) ** 2);
+                if (distToHole < hole.radius - ball.radius) {
+                    resetGame();
+                }
+            }
+        }
+
+        // Reset game
+        function resetGame() {
+            ball.x = 100;
+            ball.y = 500;
+            ball.vx = 0;
+            ball.vy = 0;
+            shots = 0;
+            generateTerrain();
+            powerFill.style.width = '0%';
+            updateInfo();
+        }
+
+        // Update info display
+        function updateInfo() {
+            info.textContent = `Shots: ${shots}`;
+        }
+
+        // Mouse events
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const dist = Math.sqrt((mouseX - ball.x) ** 2 + (mouseY - ball.y) ** 2);
+            if (dist < 30 && ball.vx === 0 && ball.vy === 0) {
+                isDragging = true;
+                dragStart.x = mouseX;
+                dragStart.y = mouseY;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                const dx = ball.x - mouseX;
+                const dy = ball.y - mouseY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const maxPower = 150;
+                const power = Math.min(distance, maxPower) / maxPower * 100;
+                powerFill.style.width = power + '%';
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                const dx = ball.x - mouseX;
+                const dy = ball.y - mouseY;
+                const power = Math.min(Math.sqrt(dx * dx + dy * dy), 150) * 0.15;
+                
+                ball.vx = dx * power * 0.1;
+                ball.vy = dy * power * 0.1;
+                
+                isDragging = false;
+                shots++;
+                updateInfo();
+                powerFill.style.width = '0%';
+            }
+        });
+
+        // Game loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawWalls();
+            drawTerrain();
+            drawHole();
+            updateBall();
+            drawBall();
+            
+            if (isDragging) {
+                const rect = canvas.getBoundingClientRect();
+                drawSlingshot(dragStart.x, dragStart.y);
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize game
+        generateTerrain();
+        updateInfo();
+        gameLoop();
+    </script>
+</body>
+</html>
+

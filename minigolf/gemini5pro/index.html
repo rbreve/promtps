@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- create a slingshot like mechanic for launching a ball, create a random terrain, inside a hole, if when the ball hits the hall it restarts again, like a golf sling shot game, using js/html, make two walls in the left and right side of screen so the ball can bounce, -->
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slingshot Golf (Gemini 5 Pro)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #333;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        h1 {
+            margin: 10px;
+        }
+        #gameCanvas {
+            background-color: #87CEEB; /* Sky blue */
+            border: 2px solid #fff;
+        }
+        #info {
+            display: flex;
+            justify-content: space-between;
+            width: 800px; /* Same as canvas width */
+            padding: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Slingshot Golf (Gemini 5 Pro)</h1>
+    <div id="info">
+        <div id="score">Score: 0</div>
+        <div id="shots">Shots: 0</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <p>Click and drag the ball to launch it. Get it in the hole!</p>
+
+    <script src="game.js"></script>
+</body>
+</html>
