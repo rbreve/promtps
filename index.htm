@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prompts Demos</title>
+    <style>
+      :root{
+        --bg:#0b0f1a; --panel:#0f1726; --ink:#e6edf3; --muted:#9fb0c6; --accent:#74b8ff; --card:#121b2e;
+      }
+      *{ box-sizing: border-box; }
+      html, body { height: 100%; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial; }
+      header { padding: 32px 20px 16px; display: grid; gap: 8px; place-items: center; text-align: center; }
+      header h1 { margin: 0; font-size: 28px; letter-spacing: .3px; }
+      header p { margin: 0; color: var(--muted); font-size: 14px; }
+      main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 40px; }
+      section { margin: 18px 0 26px; }
+      .section-title { display:flex; align-items:center; gap:10px; margin: 24px 0 12px; }
+      .section-title h2 { margin: 0; font-size: 18px; font-weight: 700; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+      .card { background: var(--card); border: 1px solid #1b2741; border-radius: 12px; padding: 14px; display: grid; gap: 8px; transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
+      .card:hover { transform: translateY(-2px); border-color: #28406f; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+      .card a { color: inherit; text-decoration: none; display: block; }
+      .name { font-weight: 700; letter-spacing: .2px; }
+      .path { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
+      footer { opacity: .7; text-align:center; font-size:12px; padding: 18px; }
+      .badge { background: #0f223d; color: #9ed0ff; border: 1px solid #28406f; border-radius: 999px; padding: 2px 8px; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Prompts Demos</h1>
+      <p>Select a demo below. Each item opens the corresponding subfolder's page.</p>
+    </header>
+    <main>
+      <section>
+        <div class="section-title">
+          <h2>Minigolf</h2>
+          <span class="badge">6 demos</span>
+          <video src="https://files.catbox.moe/59tc8r.mp4" controls></video>
+        </div>
+        <div class="grid">
+          <div class="card"><a href="minigolf/gpt5/index.htm"><div class="name">GPT‑5</div><div class="path">/minigolf/gpt5/index.htm</div></a></div>
+          <div class="card"><a href="minigolf/gpt5max/index.html"><div class="name">GPT‑5 Max</div><div class="path">/minigolf/gpt5max/index.html</div></a></div>
+          <div class="card"><a href="minigolf/claudesonnet4/index.htm"><div class="name">Claude Sonnet 4</div><div class="path">/minigolf/claudesonnet4/index.htm</div></a></div>
+          <div class="card"><a href="minigolf/gemini5pro/index.html"><div class="name">Gemini 5 Pro</div><div class="path">/minigolf/gemini5pro/index.html</div></a></div>
+          <div class="card"><a href="minigolf/qwen3/index.htm"><div class="name">Qwen 3</div><div class="path">/minigolf/qwen3/index.htm</div></a></div>
+          <div class="card"><a href="minigolf/opus4/index.htm"><div class="name">Opus 4</div><div class="path">/minigolf/opus4/index.htm</div></a></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>Airplanes</h2>
+          <span class="badge">1 demo</span>
+        </div>
+        <div class="grid">
+          <div class="card"><a href="airplanes/gpt5/airplane.htm"><div class="name">GPT‑5 Airplane</div><div class="path">/airplanes/gpt5/airplane.htm</div></a></div>
+        </div>
+      </section>
+    </main>
+    <footer>
+      Add more demos by creating subfolders and linking their <code>index.htm</code>/<code>index.html</code> here.
+    </footer>
+  </body>
+  </html>
+
